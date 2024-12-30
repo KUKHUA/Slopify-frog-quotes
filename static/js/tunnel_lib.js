@@ -1,9 +1,7 @@
 class TunnelConnection {
     // A valid config object should have the following properties:
     // encryption: boolean;
-    // compression: boolean;
-    // random: boolean; 
-    // firstuser: boolean; 
+    
     constructor(host, tunnelId, subChannel, callback, config) {
         this.host = new URL(host);
         this.tunnelId = tunnelId;
@@ -12,23 +10,22 @@ class TunnelConnection {
         this.config = config || {
             encryption: false,
             compression: false,
-            random: false,
         };
         
         this.eventSource = null;
         
-        // Ensure config properties are set
+        // compression hasn't been implemted yet : (
         this.config.encryption = !!this.config.encryption;
         this.config.compression = !!this.config.compression;
-        this.config.random = !!this.config.random;
     }
 
     async init() {
+        // No need for init, if your not doing encryption
         if (this.config.encryption) {
             this.keys = {};
             await this.#generateKeys();
 
-            // Bind the handler to preserve 'this' context
+            
             this.keyExchange = new TunnelConnection(
                 this.host, 
                 this.tunnelId, 
@@ -270,8 +267,10 @@ class TunnelConnection {
                 if (message[this.userID]) {
                     try {
                         const privateKeyHex = await this.#exportPrivateKey();
-                        const decryptedData = await this.#decryptData(message[this.userID], privateKeyHex);
-                        this.callback(decryptedData);
+                        let decryptedData = await this.#decryptData(message[this.userID], privateKeyHex);
+                        decryptedData = JSON.parse(decryptedData);
+                        // This will only give the callback the data intended for this user.
+                        this.callback(decryptedData[this.userID]);
                     } catch (error) {
                         console.error("Decryption failed:", error);
                     }
@@ -287,6 +286,7 @@ class TunnelConnection {
         if (this.config.encryption) {
             let sendURL = new URL('api/v3/tunnel/send', this.host);
             let messageBody = {};
+            
             for (let userID in this.keys) {
                 if (this.keys.hasOwnProperty(userID)) {
                     if(userID === this.userID) return;
@@ -300,6 +300,7 @@ class TunnelConnection {
                 subChannel: this.subChannel,
                 content: JSON.stringify(messageBody),
             };
+            
             fetch(sendURL, {
                 method: 'POST',
                 headers: {
